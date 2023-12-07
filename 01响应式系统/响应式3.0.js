@@ -24,7 +24,8 @@ function effect(fn) {
 }
 
 function cleanUp(effectFn) {
-  for (let i = 0; i <= effectFn.deps.length; i++) {
+  if (!effectFn.deps.length) return;
+  for (let i = 0; i < effectFn.deps.length; i++) {
     const deps = effectFn.deps[i];
     deps.delete(effectFn);
   }
