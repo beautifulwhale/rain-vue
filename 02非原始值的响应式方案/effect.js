@@ -1,3 +1,4 @@
+import { shouldTrack } from "./createArrayInstrumentations.js";
 export const ITERATE_KEY = Symbol();
 
 let activeEffect;
@@ -34,7 +35,7 @@ function cleanUp(effectFn) {
 const bucket = new WeakMap();
 
 export function track(target, key) {
-  if (!activeEffect) return;
+  if (!activeEffect || !shouldTrack) return;
   let depMaps = bucket.get(target);
   if (!depMaps) {
     bucket.set(target, (depMaps = new Map()))
@@ -48,14 +49,29 @@ export function track(target, key) {
   activeEffect.deps.push(deps);
 }
 
-export function trigger(target, key, type) {
+export function trigger(target, key, type, newValue) {
   const depMaps = bucket.get(target);
   if (!depMaps) return;
+
   const effect = depMaps.get(key);
   const iterateEffects = depMaps.get(ITERATE_KEY);
 
   // 避免无限递归
   const effectToRun = new Set();
+
+  if (Array.isArray(target)) {
+    depMaps.forEach((effect, i) => {
+      // 当索引大于或者等于length时 才去触发更新
+      if (i >= newValue) {
+        effect && effect.forEach(fn => {
+          if (activeEffect !== fn) {
+            effectToRun.add(fn);
+          }
+        })
+      }
+    })
+  }
+
   effect && effect.forEach(fn => {
     if (activeEffect !== fn) {
       effectToRun.add(fn);
