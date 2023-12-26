@@ -74,6 +74,5 @@ function proxyRefs(obj) {
 
 const obj1 = proxyRefs({ ...toRefs(obj) })
 obj1.foo = 3;
-// TODO FIXED  undefined ???
 console.log('obj1', obj1.foo);
 
