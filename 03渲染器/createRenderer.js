@@ -1,7 +1,8 @@
+import { shouldSetAsProps } from "./shouldSetAsProps.js";
 
 // 通用渲染器 不依赖于浏览器
 function createRenderer(options) {
-  const { createElement, insert, setElementText } = options;
+  const { createElement, insert, setElementText, patchProps } = options;
 
   function mountElement(vnode, container) {
     const el = createElement(vnode.type);
@@ -10,7 +11,7 @@ function createRenderer(options) {
     }
     if (vnode.props) {
       for (const key in vnode.props) {
-        el.setAttribute(key, vnode.props[key]);
+        patchProps(el, key, vnode.props[key]);
       }
     }
     insert(el, container);
@@ -54,14 +55,30 @@ const renderer = createRenderer({
   },
   insert(vnode, parent, anchor = null) {
     parent.insertBefore(vnode, anchor);
+  },
+  patchProps(el, key, value) {
+    // 优先设置DOM Properties 其次设置HTML Attribute
+    // 去除只读属性设置
+    if (shouldSetAsProps(key, el)) {
+      const type = typeof el[key];
+      // 如果是布尔类型，并且 value 是空字符串，则将值矫正为 true
+      if (type === 'boolean' && value === '') {
+        el[key] = true;
+      } else {
+        el[key] = value;
+      }
+    }
+    else {
+      el.setAttribute(key, value);
+    }
   }
 })
 
-// test 
+// test
 const vnode = {
-  type: 'div',
+  type: 'button',
   props: {
-    id: 'foo',
+    disabled: '',
   },
   children: 'hello'
 }
