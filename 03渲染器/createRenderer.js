@@ -1,14 +1,21 @@
 import { shouldSetAsProps } from "./shouldSetAsProps.js";
+import { unmount } from "./unmount.js";
 
 // 通用渲染器 不依赖于浏览器
 function createRenderer(options) {
   const { createElement, insert, setElementText, patchProps } = options;
 
   function mountElement(vnode, container) {
-    const el = createElement(vnode.type);
+    // vnode.el 关联真实DOM 以便卸载
+    const el = vnode.el = createElement(vnode.type);
     if (typeof vnode.children === 'string') {
       setElementText(el, vnode.children);
+    } else if (Array.isArray(vnode.children)) {
+      vnode.children.forEach(child => {
+        patch(null, child, el);
+      })
     }
+
     if (vnode.props) {
       for (const key in vnode.props) {
         patchProps(el, key, vnode.props[key]);
@@ -32,7 +39,7 @@ function createRenderer(options) {
     } else {
       // 新节点不在, 旧节点存在 说明是卸载操作
       if (container._vnode) {
-        container.innerHTML = ''
+        unmount(container._vnode);
       }
     }
     // 把vnode存储为_vnode, 即后续渲染的旧节点
@@ -58,8 +65,10 @@ const renderer = createRenderer({
   },
   patchProps(el, key, value) {
     // 优先设置DOM Properties 其次设置HTML Attribute
-    // 去除只读属性设置
-    if (shouldSetAsProps(key, el)) {
+    if (key === 'class') {
+      // 提高性能
+      el.className = value;
+    } else if (shouldSetAsProps(key, el)) {
       const type = typeof el[key];
       // 如果是布尔类型，并且 value 是空字符串，则将值矫正为 true
       if (type === 'boolean' && value === '') {
