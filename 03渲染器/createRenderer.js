@@ -18,7 +18,7 @@ function createRenderer(options) {
 
     if (vnode.props) {
       for (const key in vnode.props) {
-        patchProps(el, key, vnode.props[key]);
+        patchProps(el, key, null, vnode.props[key]);
       }
     }
     insert(el, container);
@@ -32,7 +32,7 @@ function createRenderer(options) {
     }
     // 不同类型的vnode需要提供不同方式的挂载或者打补丁
     const { type } = n2;
-    if (type === 'string') {
+    if (typeof type === 'string') {
       // 处理正常标签类型
       if (!n1) {
         mountElement(n2, container);
@@ -40,7 +40,7 @@ function createRenderer(options) {
         // TODO: n1 存在，意味着打补丁，暂时省略  
         // patchElement(n1, n2)
       }
-    } else if (type === 'object') {
+    } else if (typeof type === 'object') {
       // 处理组件类型
     } else {
       // etc...
@@ -78,22 +78,49 @@ const renderer = createRenderer({
   insert(vnode, parent, anchor = null) {
     parent.insertBefore(vnode, anchor);
   },
-  patchProps(el, key, value) {
+  patchProps(el, key, preValue, nextValue) {
+    // 事件处理: 基本思路伪造事件处理函数invoker, 把真实的事件处理函数赋值为invoker.value, 若更新直接更新invoker.value即可
+    if (/^on/.test(key)) {
+      // 真实事件名称
+      const name = key.slice(2).toLocaleLowerCase();
+      // 设定为对象类型来处理多种事件函数
+      const invokers = el._vei || (el._vei = {});
+      let invoker = invokers[key];
+      if (nextValue) {
+        if (!invoker) {
+          invoker = el._vei[key] = (e) => {
+            if (Array.isArray(invoker.value)) {
+              invoker.value.forEach(fn => fn(e));
+            } else {
+              invoker.value(e);
+            }
+          }
+          invoker.value = nextValue;
+          document.addEventListener(name, invoker);
+        } else {
+          // 更新事件
+          invoker.value = nextValue;
+        }
+      } else {
+        // 卸载事件
+        document.removeEventListener(name, invoker);
+      }
+    }
     // 优先设置DOM Properties 其次设置HTML Attribute
-    if (key === 'class') {
+    else if (key === 'class') {
       // 提高性能
-      el.className = value;
+      el.className = nextValue;
     } else if (shouldSetAsProps(key, el)) {
       const type = typeof el[key];
-      // 如果是布尔类型，并且 value 是空字符串，则将值矫正为 true
-      if (type === 'boolean' && value === '') {
+      // 如果是布尔类型，并且 nextValue 是空字符串，则将值矫正为 true
+      if (type === 'boolean' && nextValue === '') {
         el[key] = true;
       } else {
-        el[key] = value;
+        el[key] = nextValue;
       }
     }
     else {
-      el.setAttribute(key, value);
+      el.setAttribute(key, nextValue);
     }
   }
 })
@@ -102,7 +129,14 @@ const renderer = createRenderer({
 const vnode = {
   type: 'button',
   props: {
-    disabled: '',
+    onClick: [
+      () => {
+        console.log('button clicked');
+      },
+      () => {
+        console.log('button not clicked');
+      }
+    ]
   },
   children: 'hello'
 }
