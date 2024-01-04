@@ -89,6 +89,9 @@ const renderer = createRenderer({
       if (nextValue) {
         if (!invoker) {
           invoker = el._vei[key] = (e) => {
+            // 如果事件发生的事件早于事件绑定的事件, 不去触发
+            if (e.timeStamp < invoker.attached) return;
+
             if (Array.isArray(invoker.value)) {
               invoker.value.forEach(fn => fn(e));
             } else {
@@ -96,6 +99,9 @@ const renderer = createRenderer({
             }
           }
           invoker.value = nextValue;
+          // 添加绑定事件的时间
+          invoker.attached = performance.now();
+
           document.addEventListener(name, invoker);
         } else {
           // 更新事件
