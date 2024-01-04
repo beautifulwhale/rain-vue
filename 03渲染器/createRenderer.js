@@ -25,10 +25,25 @@ function createRenderer(options) {
   }
 
   function patch(n1, n2, container) {
-    if (!n1) {
-      mountElement(n2, container);
+    // 若标签名不相同, 卸载旧节点,挂载新节点
+    if (n1 && n1.type !== n2.type) {
+      unmount(n1);
+      n1 = null; // 保证后续挂载新节点
+    }
+    // 不同类型的vnode需要提供不同方式的挂载或者打补丁
+    const { type } = n2;
+    if (type === 'string') {
+      // 处理正常标签类型
+      if (!n1) {
+        mountElement(n2, container);
+      } else {
+        // TODO: n1 存在，意味着打补丁，暂时省略  
+        // patchElement(n1, n2)
+      }
+    } else if (type === 'object') {
+      // 处理组件类型
     } else {
-      // TODO: n1 存在，意味着打补丁，暂时省略  
+      // etc...
     }
   }
 
