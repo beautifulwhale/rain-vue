@@ -1,9 +1,15 @@
-import { shouldSetAsProps } from "./shouldSetAsProps.js";
 import { unmount } from "./unmount.js";
+import { Text, Fragment } from "./type.js";
 
 // 通用渲染器 不依赖于浏览器
 function createRenderer(options) {
-  const { createElement, insert, setElementText, patchProps } = options;
+  const {
+    createElement,
+    insert,
+    setElementText,
+    patchProps,
+    createText,
+    setText } = options;
 
   function mountElement(vnode, container) {
     // vnode.el 关联真实DOM 以便卸载
@@ -37,8 +43,28 @@ function createRenderer(options) {
       if (!n1) {
         mountElement(n2, container);
       } else {
-        // TODO: n1 存在，意味着打补丁，暂时省略  
-        // patchElement(n1, n2)
+        // n1 存在，意味着打补丁
+        patchElement(n1, n2)
+      }
+    } else if (typeof type === Text) {
+      // 若没有旧文本节点
+      if (!n1) {
+        const el = n2.el = createText(n2.children);
+        insert(el, container);
+      } else {
+        // 存在旧文本节点, 更新为新文本节点
+        const el = n2.el = n1.el;
+        if (n1.children !== n2.children) {
+          setText(el, n2.children);
+        }
+      }
+    } else if (typeof type === Fragment) {
+      // Fragment只处理子节点就可以
+      // 若不存在旧节点, 直接挂载新节点
+      if (!n1) {
+        n2.children.forEach(c => patch(null, c, container))
+      } else {
+        patchChildren(n1, n2, container)
       }
     } else if (typeof type === 'object') {
       // 处理组件类型
@@ -59,6 +85,50 @@ function createRenderer(options) {
     }
     // 把vnode存储为_vnode, 即后续渲染的旧节点
     container._vnode = vnode;
+  }
+
+  function patchElement(n1, n2) {
+    // 取出被打补丁的节点
+    const el = n2.el = n1.el;
+    // patch props
+    const oldProps = n1.props;
+    const newProps = n2.props;
+    for (const key in newProps) {
+      if (newProps[key] !== oldProps[key]) {
+        patchProps(el, key, oldProps[key], newProps[key])
+      }
+    }
+
+    // 去除旧props
+    for (const key in oldProps) {
+      if (!(key in newProps)) {
+        patchProps(el, key, oldProps[key], null)
+      }
+    }
+    // patch children
+    patchChildren(n1, n2, el)
+  }
+
+  function patchChildren(n1, n2, container) {
+    if (typeof n2.children === 'string') {
+      n1.children.forEach(c => unmount(c));
+      setElementText(container, n2.children);
+    } else if (Array.isArray(n2.children)) {
+      if (Array.isArray(n1.children)) {
+        n1.children.forEach(c => unmount(c));
+      } else {
+        setElementText(container, '')
+      }
+      n2.children.forEach(i => {
+        patch(null, i, container)
+      })
+    } else {
+      if (Array.isArray(n1.children)) {
+        n1.children.forEach(c => unmount(c))
+      } else if (typeof n1.children === 'string') {
+        setElementText(container, '')
+      }
+    }
   }
 
   return {
@@ -128,6 +198,12 @@ const renderer = createRenderer({
     else {
       el.setAttribute(key, nextValue);
     }
+  },
+  createText(text) {
+    return document.createTextNode(text);
+  },
+  setText(el, text) {
+    el.nodeValue = text;
   }
 })
 
