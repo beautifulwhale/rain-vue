@@ -115,13 +115,36 @@ function createRenderer(options) {
       setElementText(container, n2.children);
     } else if (Array.isArray(n2.children)) {
       if (Array.isArray(n1.children)) {
-        n1.children.forEach(c => unmount(c));
+        // diff减少开销 新节点与旧节点先patch 若长度不一样, 适当挂载与卸载
+        const oldChildren = n1.children;
+        const newChildren = n2.children;
+        const oldLen = oldChildren.length;
+        const newLen = newChildren.length;
+        // 取出公共长度
+        const commonLength = Math.min(oldLen, newLen);
+        for (let i = 0; i < commonLength; i++) {
+          patch(oldChildren[i], newChildren[i], container);
+        }
+        // 挂载新的
+        if (newLen > oldLen) {
+          for (let i = commonLength; i < newLen; i++) {
+            patch(null, newChildren[i], container);
+          }
+        }
+
+        // 卸载旧的多余的
+        if (oldLen > newLen) {
+          for (let i = commonLength; i < oldLen; i++) {
+            unmount(oldChildren[i]);
+          }
+        }
+
       } else {
         setElementText(container, '')
+        n2.children.forEach(i => {
+          patch(null, i, container)
+        })
       }
-      n2.children.forEach(i => {
-        patch(null, i, container)
-      })
     } else {
       if (Array.isArray(n1.children)) {
         n1.children.forEach(c => unmount(c))
