@@ -11,7 +11,7 @@ function createRenderer(options) {
     createText,
     setText } = options;
 
-  function mountElement(vnode, container) {
+  function mountElement(vnode, container, anchor) {
     // vnode.el 关联真实DOM 以便卸载
     const el = vnode.el = createElement(vnode.type);
     if (typeof vnode.children === 'string') {
@@ -27,10 +27,10 @@ function createRenderer(options) {
         patchProps(el, key, null, vnode.props[key]);
       }
     }
-    insert(el, container);
+    insert(el, container, anchor);
   }
 
-  function patch(n1, n2, container) {
+  function patch(n1, n2, container, anchor) {
     // 若标签名不相同, 卸载旧节点,挂载新节点
     if (n1 && n1.type !== n2.type) {
       unmount(n1);
@@ -41,7 +41,7 @@ function createRenderer(options) {
     if (typeof type === 'string') {
       // 处理正常标签类型
       if (!n1) {
-        mountElement(n2, container);
+        mountElement(n2, container, anchor);
       } else {
         // n1 存在，意味着打补丁
         patchElement(n1, n2)
@@ -145,10 +145,14 @@ function createRenderer(options) {
         // 使用key优化
         for (let i = 0; i < newChildren.length; i++) {
           const newVNode = newChildren[i];
-          for (let j = 0; j < oldChildren.length; j++) {
+          let j = 0;
+          // 判断是否在旧节点中找到与新节点相同key的 若找不到 添加节点
+          let find = false;
+          for (j; j < oldChildren.length; j++) {
             const oldVNode = oldChildren[j];
             if (newVNode.key === oldVNode.key) {
               patch(oldVNode, newVNode, container);
+              find = true;
               // 寻找移动的元素: 相同key中遇到的索引最大值,后续查到在旧节点中的索引小于最大值便需要移动
               if (j < lastIndex) {
                 // 元素的真实DOM需要移动
@@ -164,6 +168,28 @@ function createRenderer(options) {
               }
               break;
             }
+            // 添加
+            if (!find) {
+              const preVNode = newVNode[i - 1];
+              let anchor = null;
+              // 确定锚点位置
+              if (preVNode) {
+                anchor = preVNode.el.nextSibling;
+              } else {
+                anchor = container.firstChild;
+              }
+              // 挂载newVNode
+              patch(null, newVNode, container, anchor);
+            }
+          }
+        }
+
+        // 删除旧节点中未用到的
+        for (let i = 0; i < oldChildren.length; i++) {
+          const oldVNode = oldChildren[i];
+          const has = newChildren.find(vnode => vnode.key === oldVNode.key);
+          if (!has) {
+            unmount(oldVNode);
           }
         }
 
