@@ -111,31 +111,59 @@ function createRenderer(options) {
 
   function patchChildren(n1, n2, container) {
     if (typeof n2.children === 'string') {
-      n1.children.forEach(c => unmount(c));
+      if (Array.isArray(n1.children)) {
+        n1.children.forEach(c => unmount(c));
+      }
       setElementText(container, n2.children);
     } else if (Array.isArray(n2.children)) {
       if (Array.isArray(n1.children)) {
         // diff减少开销 新节点与旧节点先patch 若长度不一样, 适当挂载与卸载
         const oldChildren = n1.children;
         const newChildren = n2.children;
-        const oldLen = oldChildren.length;
-        const newLen = newChildren.length;
-        // 取出公共长度
-        const commonLength = Math.min(oldLen, newLen);
-        for (let i = 0; i < commonLength; i++) {
-          patch(oldChildren[i], newChildren[i], container);
-        }
-        // 挂载新的
-        if (newLen > oldLen) {
-          for (let i = commonLength; i < newLen; i++) {
-            patch(null, newChildren[i], container);
-          }
-        }
+        let lastIndex = 0;
+        // const oldLen = oldChildren.length;
+        // const newLen = newChildren.length;
+        // // 取出公共长度
+        // const commonLength = Math.min(oldLen, newLen);
+        // for (let i = 0; i < commonLength; i++) {
+        //   patch(oldChildren[i], newChildren[i], container);
+        // }
+        // // 挂载新的
+        // if (newLen > oldLen) {
+        //   for (let i = commonLength; i < newLen; i++) {
+        //     patch(null, newChildren[i], container);
+        //   }
+        // }
 
-        // 卸载旧的多余的
-        if (oldLen > newLen) {
-          for (let i = commonLength; i < oldLen; i++) {
-            unmount(oldChildren[i]);
+        // // 卸载旧的多余的
+        // if (oldLen > newLen) {
+        //   for (let i = commonLength; i < oldLen; i++) {
+        //     unmount(oldChildren[i]);
+        //   }
+        // }
+
+        // 使用key优化
+        for (let i = 0; i < newChildren.length; i++) {
+          const newVNode = newChildren[i];
+          for (let j = 0; j < oldChildren.length; j++) {
+            const oldVNode = oldChildren[j];
+            if (newVNode.key === oldVNode.key) {
+              patch(oldVNode, newVNode, container);
+              // 寻找移动的元素: 相同key中遇到的索引最大值,后续查到在旧节点中的索引小于最大值便需要移动
+              if (j < lastIndex) {
+                // 元素的真实DOM需要移动
+                // 移动规则: 由于新虚拟节点的顺序即为真实DOM顺序, 所以找到上一个节点并且插到其后面
+                const preVNode = newChildren[i - 1];
+                if (preVNode) {
+                  const anchor = preVNode.el.nextSibling;
+                  insert(newVNode.el, container, anchor);
+                }
+              } else {
+                // 更新最大索引
+                lastIndex = j;
+              }
+              break;
+            }
           }
         }
 
@@ -231,18 +259,42 @@ const renderer = createRenderer({
 })
 
 // test
-const vnode = {
-  type: 'button',
-  props: {
-    onClick: [
-      () => {
-        console.log('button clicked');
-      },
-      () => {
-        console.log('button not clicked');
-      }
-    ]
-  },
-  children: 'hello'
+// const vnode = {
+//   type: 'button',
+//   props: {
+//     onClick: [
+//       () => {
+//         console.log('button clicked');
+//       },
+//       () => {
+//         console.log('button not clicked');
+//       }
+//     ]
+//   },
+//   children: 'hello'
+// }
+// renderer.render(vnode, document.getElementById('app'));
+
+
+// test use key patch
+const oldVNode = {
+  type: 'div',
+  children: [
+    { type: 'p', children: '1', key: 1 },
+    { type: 'p', children: '2', key: 2 },
+    { type: 'p', children: 'hello', key: 3 }
+  ]
 }
-renderer.render(vnode, document.getElementById('app'));
+const newVNode = {
+  type: 'div',
+  children: [
+    { type: 'p', children: 'world', key: 3 },
+    { type: 'p', children: '1', key: 1 },
+    { type: 'p', children: '2', key: 2 }
+  ]
+}
+renderer.render(oldVNode, document.querySelector('#app'))
+setTimeout(() => {
+  debugger;
+  renderer.render(newVNode, document.querySelector('#app'))
+}, 1000)
