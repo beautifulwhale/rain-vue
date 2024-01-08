@@ -117,6 +117,7 @@ function createRenderer(options) {
       setElementText(container, n2.children);
     } else if (Array.isArray(n2.children)) {
       if (Array.isArray(n1.children)) {
+        // 简单diff算法 但性能并非最佳
         // diff减少开销 新节点与旧节点先patch 若长度不一样, 适当挂载与卸载
         const oldChildren = n1.children;
         const newChildren = n2.children;
@@ -193,6 +194,8 @@ function createRenderer(options) {
           }
         }
 
+        // 双端diff算法
+        patchKeyedChildren(n1, n2, container);
       } else {
         setElementText(container, '')
         n2.children.forEach(i => {
@@ -204,6 +207,46 @@ function createRenderer(options) {
         n1.children.forEach(c => unmount(c))
       } else if (typeof n1.children === 'string') {
         setElementText(container, '')
+      }
+    }
+  }
+
+  // 双端diff: 四个步骤: 1. 新旧头部节点比较 2. 新旧尾部节点 3. 旧头部与新尾部节点 4. 旧尾部与新头部
+  function patchKeyedChildren(n1, n2, container) {
+    const oldChildren = n1.children;
+    const newChildren = n2.children;
+    // 定义四个节点指针
+    let oldStartIndex = 0;
+    let oldEndIndex = oldChildren.length - 1;
+    let newStartIndex = 0;
+    let newEndIndex = newChildren.length - 1;
+    // 四个节点
+    let oldStartNode = oldChildren[oldStartIndex];
+    let oldEndNode = oldChildren[oldEndIndex];
+    let newStartNode = newChildren[newStartIndex];
+    let newEndNode = newChildren[newEndIndex];
+
+    // 按照步骤进行比价, 并且操作DOM顺序
+    while (oldEndIndex >= oldStartNode && newEndIndex >= newStartNode) {
+      if (oldStartNode.key === newStartNode.key) {
+        patch(oldStartNode, newStartNode, container);
+        oldStartNode = oldChildren[++oldStartIndex];
+        newStartNode = newChildren[++newStartIndex];
+      } else if (oldEndNode.key === newEndNode.key) {
+        patch(oldEndNode, newEndNode, container);
+        oldEndNode = oldChildren[--oldEndIndex];
+        newEndNode = newChildren[--newEndIndex];
+      } else if (oldStartNode.key === newEndNode.key) {
+        patch(oldStartNode, newEndNode, container);
+        insert(oldStartNode.el, container, oldEndNode.el.nextSibling);
+        oldStartNode = oldChildren[++oldStartIndex];
+        newEndNode = newChildren[--newEndIndex];
+      } else if (oldEndNode.key === newStartNode.key) {
+        patch(oldEndNode, newStartNode, container);
+        // 将旧节点中最后一个节点插到索引为oldStartIndex对应的真实DOM的前面
+        insert(oldEndNode.el, container, oldStartNode.el);
+        oldEndNode = oldChildren[--oldEndIndex];
+        newStartNode = newChildren[++newStartIndex];
       }
     }
   }
