@@ -1,4 +1,5 @@
 import { unmount } from "./unmount.js";
+import { shouldSetAsProps } from "./shouldSetAsProps.js";
 import { Text, Fragment } from "./type.js";
 
 // 通用渲染器 不依赖于浏览器
@@ -88,7 +89,7 @@ function createRenderer(options) {
   }
 
   function patchElement(n1, n2) {
-    // 取出被打补丁的节点
+    // 取出被打补丁的节点  新节点指向真实DOM
     const el = n2.el = n1.el;
     // patch props
     const oldProps = n1.props;
@@ -247,6 +248,31 @@ function createRenderer(options) {
         insert(oldEndNode.el, container, oldStartNode.el);
         oldEndNode = oldChildren[--oldEndIndex];
         newStartNode = newChildren[++newStartIndex];
+      } else {
+        // 非理想状态下: 旧节点中去寻找新的头部节点, 找到就移动, 找不到就意味着新增
+        const oldIdx = oldChildren.findIndex(child => child.key === newStartNode.key);
+        if (oldIdx > 0) {
+          patch(oldChildren[oldIdx], newStartNode, container);
+          insert(oldChildren[oldIdx].el, container, oldStartNode.el);
+          oldChildren[oldIdx] = undefined
+        } else {
+          // 新增
+          patch(null, newStartNode, container, oldStartNode.el);
+        }
+        newStartNode = newChildren[++newStartIndex];
+      }
+    }
+
+    // 处理diff遗漏的新增节点与删除节点
+    if (newStartIndex <= newEndIndex && oldEndIndex < oldStartIndex) {
+      // 说明仍存在新增节点
+      for (let i = newStartIndex; i <= newEndIndex; i++) {
+        patch(null, newChildren[i], container, oldStartNode.el);
+      }
+    } else if (newEndIndex < newStartIndex && oldStartIndex <= oldEndIndex) {
+      // 存在未删除旧节点
+      for (let j = oldStartIndex; j <= oldEndIndex; j++) {
+        unmount(oldChildren[j])
       }
     }
   }
