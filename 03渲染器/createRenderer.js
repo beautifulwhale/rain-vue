@@ -232,6 +232,11 @@ function createRenderer(options) {
 
     // 按照步骤进行比价, 并且操作DOM顺序
     while (oldEndIndex >= oldStartNode && newEndIndex >= newStartNode) {
+      if (!oldStartNode) {
+        oldStartNode = oldChildren[++oldStartIndex];
+      } else if (!oldEndNode) {
+        oldEndNode = oldChildren[--oldEndIndex];
+      }
       if (oldStartNode.key === newStartNode.key) {
         patch(oldStartNode, newStartNode, container);
         oldStartNode = oldChildren[++oldStartIndex];
