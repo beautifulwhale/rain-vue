@@ -197,6 +197,9 @@ function createRenderer(options) {
 
         // 双端diff算法
         patchKeyedChildren(n1, n2, container);
+
+        // 快速diff算法
+        patchQuickKeyedChildren(n1, n2, container);
       } else {
         setElementText(container, '')
         n2.children.forEach(i => {
@@ -277,6 +280,46 @@ function createRenderer(options) {
     }
   }
 
+  // 快速diff: 1. 比较头部节点是否相同 2. 比较尾部节点是否相同 3. 添加或删除多余节点
+  function patchQuickKeyedChildren(n1, n2, container) {
+    const oldChildren = n1.children;
+    const newChildren = n2.children;
+    // 更新头部
+    let j = 0;
+    let oldStartVNode = oldChildren[j];
+    let newStartVNode = newChildren[j];
+    while (oldStartVNode.key === newStartVNode.key) {
+      patch(oldChildren[j], newChildren[j], container);
+      j++;
+      oldStartVNode = oldChildren[j];
+      newStartVNode = newChildren[j];
+    }
+    // 由于不确定尾部有多少, 确定两个指针
+    let oldEndIndex = n1.children.length - 1;
+    let newEndIndex = n2.children.length - 1;
+    let oldEndVNode = oldChildren[oldEndIndex];
+    let newEndVNode = newChildren[newEndIndex];
+    while (oldEndVNode.key === newEndVNode.key) {
+      patch(oldEndVNode, newEndVNode, container);
+      oldEndIndex--;
+      newEndIndex--;
+      oldEndVNode = oldChildren[oldEndIndex];
+      newEndVNode = newChildren[newEndIndex];
+    }
+
+    // 新增、删除节点
+    if (j <= newEndIndex && oldEndIndex > j) {
+      const anchorIndex = newEndIndex + 1;
+      const anchor = anchorIndex < newChildren.length ? newChildren[anchorIndex].el : null;
+      while (j <= newEndIndex) {
+        patch(null, newChildren[j++], container, anchor);
+      }
+    } else if (j > newEndIndex && oldEndIndex >= j) {
+      while (j <= oldEndIndex) {
+        unmount(oldChildren[j++]);
+      }
+    }
+  }
   return {
     mountElement,
     patch,
