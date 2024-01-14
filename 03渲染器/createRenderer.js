@@ -69,6 +69,11 @@ function createRenderer(options) {
       }
     } else if (typeof type === 'object') {
       // 处理组件类型
+      if (!n1) {
+        mountComponent(n2, container, anchor);
+      } else {
+        patchComponent(n1, n2);
+      }
     } else {
       // etc...
     }
@@ -324,6 +329,18 @@ function createRenderer(options) {
         unmount(oldChildren[j++]);
       }
     }
+  }
+
+  // 挂载组件
+  function mountComponent(vnode, container, anchor) {
+    const { render } = vnode.type;
+    const subTree = render();
+    patch(null, subTree, container, anchor);
+  }
+
+  // 组件打补丁
+  function patchComponent(n1, n2) {
+
   }
   return {
     mountElement,
