@@ -1,3 +1,5 @@
+import { reactive } from '../02非原始值的响应式方案/reactive.js';
+import { effect, flushJob } from '../02非原始值的响应式方案/effect.js';
 import { unmount } from "./unmount.js";
 import { shouldSetAsProps } from "./shouldSetAsProps.js";
 import { Text, Fragment } from "./type.js";
@@ -333,9 +335,17 @@ function createRenderer(options) {
 
   // 挂载组件
   function mountComponent(vnode, container, anchor) {
-    const { render } = vnode.type;
-    const subTree = render();
-    patch(null, subTree, container, anchor);
+    const { render, data } = vnode.type;
+
+    // 绑定数据
+    const state = reactive(data());
+    effect(() => {
+      const subTree = render.call(state, state);
+      patch(null, subTree, container, anchor);
+    }, {
+      // 异步任务
+      scheduler: flushJob
+    })
   }
 
   // 组件打补丁

@@ -94,3 +94,20 @@ export function trigger(target, key, type, newValue) {
     }
   });
 }
+
+// 优化性能: 多次触发副作用只让触发一次
+let isFlushing = false;
+const queue = new Set();
+const p = Promise.resolve();
+
+export function flushJob(job) {
+  queue.add(job);
+  if (!isFlushing) {
+    isFlushing = true;
+    p.then(() => {
+      queue.forEach(job => job());
+    }).finally(() => {
+      isFlushing = false;
+    })
+  }
+}
