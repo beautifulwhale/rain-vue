@@ -352,16 +352,40 @@ function createRenderer(options) {
     // 将组件实例存储起来 用于后续更新
     vnode.component = instance;
 
-    created && created.call(state);
+    // 代理组件实例的渲染上下文对象
+    const renderContext = new Proxy(instance, {
+      get(t, k, r) {
+        const { props, state } = t;
+        if (state && k in state) {
+          return state[k];
+        } else if (props && k in props) {
+          return props[k];
+        } else {
+          console.error(`${k} in not exsit`);
+        }
+      },
+      set(t, k, v, r) {
+        const { state, props } = t;
+        if (state && k in state) {
+          state[k] = v;
+        } else if (props && k in props) {
+          console.warn('Attempting to mutate prop, Props are readonly');
+        } else {
+          console.error(`${k} in not exsit`);
+        }
+      }
+    })
+
+    created && created.call(renderContext);
 
     effect(() => {
       const subTree = render.call(state, state);
 
       if (!instance.isMounted) {
-        beforeMount && beforeMount.call(state);
+        beforeMount && beforeMount.call(renderContext);
         patch(null, subTree, container, anchor);
         instance.isMounted = true;
-        mounted && mounted.call(state);
+        mounted && mounted.call(renderContext);
       } else {
         patchComponent(instance.subTree, subTree, container, anchor);
       }
