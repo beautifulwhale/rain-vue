@@ -1,5 +1,6 @@
 import { reactive } from '../02非原始值的响应式方案/reactive.js';
 import { effect, flushJob } from '../02非原始值的响应式方案/effect.js';
+import { shallowReactive } from '../02非原始值的响应式方案/shallowReactive.js';
 import { unmount } from "./unmount.js";
 import { shouldSetAsProps } from "./shouldSetAsProps.js";
 import { Text, Fragment } from "./type.js";
@@ -74,7 +75,7 @@ function createRenderer(options) {
       if (!n1) {
         mountComponent(n2, container, anchor);
       } else {
-        patchComponent(n1, n2);
+        patchComponent(n1, n2, anchor);
       }
     } else {
       // etc...
@@ -335,13 +336,37 @@ function createRenderer(options) {
 
   // 挂载组件
   function mountComponent(vnode, container, anchor) {
-    const { render, data } = vnode.type;
+    // 生命周期... 举例有created beforeMount mounted
+    const { render, data, created, beforeMount, mounted, props: propOptions } = vnode.type;
 
     // 绑定数据
     const state = reactive(data());
+    const [props] = resolveProps(propOptions, vnode.props);
+    // 组件实例
+    const instance = {
+      props: shallowReactive(props),
+      state,
+      subTree: null,
+      isMounted: false,
+    }
+    // 将组件实例存储起来 用于后续更新
+    vnode.component = instance;
+
+    created && created.call(state);
+
     effect(() => {
       const subTree = render.call(state, state);
-      patch(null, subTree, container, anchor);
+
+      if (!instance.isMounted) {
+        beforeMount && beforeMount.call(state);
+        patch(null, subTree, container, anchor);
+        instance.isMounted = true;
+        mounted && mounted.call(state);
+      } else {
+        patchComponent(instance.subTree, subTree, container, anchor);
+      }
+      // 更新组件实例的子树
+      instance.subTree = subTree;
     }, {
       // 异步任务
       scheduler: flushJob
@@ -349,9 +374,57 @@ function createRenderer(options) {
   }
 
   // 组件打补丁
-  function patchComponent(n1, n2) {
+  function patchComponent(n1, n2, anchor) {
+    // 获取当前组件并且新节点也指向该组件
+    const instance = (n2.component = n1.component);
+    const { props } = instance;
 
+    // props是否发生变化 变化即更新
+    if (hasChangeProps(n1.props, n2.props)) {
+      const [nextProps] = resolveProps(n2.type.props, n2.props);
+      for (const k in nextProps) {
+        props[k] = nextProps[k];
+      }
+      // 删除不存在的props
+      for (const k in props) {
+        if (!(k in nextProps)) {
+          delete props[k];
+        }
+      }
+    }
   }
+
+  // 解析props
+  function resolveProps(propOptions, propsData) {
+    let props = {};
+    let attrs = {};
+    for (let key in propsData) {
+      // 若为组件传递的props 与自身props中有定义, 即为合法props 否则为attrs
+      if (key in propOptions) {
+        props[key] = propsData[key]
+      } else {
+        attrs[key] = propsData[key]
+      }
+    }
+    return [props, attrs];
+  }
+
+  // 判断props在组件打补丁时是否变化
+  function hasChangeProps(preProps, nextProps) {
+    const preKeys = Object.keys(preProps);
+    const nextKeys = Object.keys(nextProps);
+    if (nextKeys.length !== preKeys.length) {
+      return true;
+    }
+
+    for (const k in preProps) {
+      if (nextProps[k] !== preProps[k]) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   return {
     mountElement,
     patch,
