@@ -338,6 +338,10 @@ function createRenderer(options) {
   function mountComponent(vnode, container, anchor) {
     // 生命周期... 举例有created beforeMount mounted
     const { render, data, created, beforeMount, mounted, props: propOptions, setup } = vnode.type;
+    const slots = vnode.children;
+
+    // 当前组件实例
+    const currentInstance = null;
 
     // 绑定数据
     const state = reactive(data());
@@ -348,6 +352,9 @@ function createRenderer(options) {
       state,
       subTree: null,
       isMounted: false,
+      slots,
+      // 可存在多个onMounted
+      mounted: []
     }
     // 将组件实例存储起来 用于后续更新
     vnode.component = instance;
@@ -362,9 +369,19 @@ function createRenderer(options) {
       }
     }
 
+    function onMounted(fn) {
+      if (currentInstance) {
+        currentInstance.mounted.push(fn);
+      } else {
+        console.error('onMounted只允许在setup中调用');
+      }
+    }
+
     // setup 实现传递参数
-    const setupContext = { attrs, emit };
+    const setupContext = { attrs, emit, slots };
+    currentInstance = instance;
     const setupResult = setup(instance.props, setupContext);
+    currentInstance = null;
 
     // 存储setup返回值
     let setupState = null;
@@ -380,6 +397,7 @@ function createRenderer(options) {
     const renderContext = new Proxy(instance, {
       get(t, k, r) {
         const { props, state } = t;
+        if (k === '$slots') return slots;
         if (state && k in state) {
           return state[k];
         } else if (props && k in props) {
@@ -407,13 +425,16 @@ function createRenderer(options) {
     created && created.call(renderContext);
 
     effect(() => {
-      const subTree = render.call(state, state);
+      const subTree = render.call(renderContext, renderContext);
 
       if (!instance.isMounted) {
         beforeMount && beforeMount.call(renderContext);
         patch(null, subTree, container, anchor);
         instance.isMounted = true;
         mounted && mounted.call(renderContext);
+
+        // 调用vue3 onMounted
+        instance.mounted.forEach(hook => hook.call(renderContext));
       } else {
         patchComponent(instance.subTree, subTree, container, anchor);
       }
