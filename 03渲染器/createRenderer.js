@@ -337,11 +337,11 @@ function createRenderer(options) {
   // 挂载组件
   function mountComponent(vnode, container, anchor) {
     // 生命周期... 举例有created beforeMount mounted
-    const { render, data, created, beforeMount, mounted, props: propOptions } = vnode.type;
+    const { render, data, created, beforeMount, mounted, props: propOptions, setup } = vnode.type;
 
     // 绑定数据
     const state = reactive(data());
-    const [props] = resolveProps(propOptions, vnode.props);
+    const [props, attrs] = resolveProps(propOptions, vnode.props);
     // 组件实例
     const instance = {
       props: shallowReactive(props),
@@ -352,6 +352,30 @@ function createRenderer(options) {
     // 将组件实例存储起来 用于后续更新
     vnode.component = instance;
 
+    function emit(event, ...payload) {
+      const eventName = `on${event[0].toLocaleUpperCase() + event.slice(1)}`;
+      const handler = instance.props[eventName];
+      if (handler) {
+        handler(eventName, ...payload);
+      } else {
+        console.error('event is not exsit');
+      }
+    }
+
+    // setup 实现传递参数
+    const setupContext = { attrs, emit };
+    const setupResult = setup(instance.props, setupContext);
+
+    // 存储setup返回值
+    let setupState = null;
+    if (typeof setupResult === 'function') {
+      if (render) console.error('render 将会失效~');
+      // 返回的函数作为组件的渲染函数
+      render = setupResult;
+    } else {
+      setupState = setupResult;
+    }
+
     // 代理组件实例的渲染上下文对象
     const renderContext = new Proxy(instance, {
       get(t, k, r) {
@@ -360,6 +384,8 @@ function createRenderer(options) {
           return state[k];
         } else if (props && k in props) {
           return props[k];
+        } else if (setupState && k in setupState) {
+          return setupState[k];
         } else {
           console.error(`${k} in not exsit`);
         }
@@ -370,6 +396,8 @@ function createRenderer(options) {
           state[k] = v;
         } else if (props && k in props) {
           console.warn('Attempting to mutate prop, Props are readonly');
+        } else if (setupState && k in setupState) {
+          setupState[k] = v;
         } else {
           console.error(`${k} in not exsit`);
         }
@@ -424,7 +452,7 @@ function createRenderer(options) {
     let attrs = {};
     for (let key in propsData) {
       // 若为组件传递的props 与自身props中有定义, 即为合法props 否则为attrs
-      if (key in propOptions) {
+      if (key in propOptions || key.startsWith('on')) {
         props[key] = propsData[key]
       } else {
         attrs[key] = propsData[key]
