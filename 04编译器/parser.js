@@ -76,7 +76,7 @@ function tokenize(str) {
           // 创建文本Token
           const token = {
             type: 'text',
-            name: chars.join('')
+            content: chars.join('')
           };
           tokens.push(token);
           chars.length = 0;
@@ -113,5 +113,54 @@ function tokenize(str) {
   return tokens;
 }
 
-const tokens = tokenize(`<div>Vue</div>`);
-console.log('tokens is', tokens);
+function parser(str) {
+  // 收集Token
+  const tokens = tokenize(str);
+
+  const root = {
+    type: 'Root',
+    children: []
+  }
+  // 当出现一个tag 类型, 创建一个Element的AST节点, 并且压入栈中, 栈顶元素作为父节点
+  const elementStack = [root];
+
+  while (tokens.length) {
+    const parent = elementStack[elementStack.length - 1];
+    const t = tokens[0];
+
+    switch (t.type) {
+      case 'tag':
+        const elementNode = {
+          type: 'Element',
+          tag: t.name,
+          children: []
+        };
+        parent.children.push(elementNode);
+
+        // 压到栈顶
+        elementStack.push(elementNode);
+        break;
+      case 'text':
+        const textNode = {
+          type: 'Text',
+          content: t.content
+        };
+        parent.children.push(textNode);
+        break;
+      case 'tagEnd':
+        // 与栈顶标签匹配,使栈顶元素出栈道
+        elementStack.pop();
+        break;
+      default:
+        break;
+    }
+    // 消费tokens
+    tokens.shift();
+  }
+  return root;
+}
+
+// const tokens = tokenize(`<div>Vue</div>`);
+
+const ast = parser(`<div><p>Vue</p><p>Template</p></div>`);
+console.log('ast is', ast);
