@@ -1,3 +1,6 @@
+import { dump } from "./dump.js";
+import { traverseNode, transform } from "./transform.js";
+
 // 定义状态机状态
 const State = {
   initial: 1,   //初始状态
@@ -164,3 +167,6 @@ function parser(str) {
 
 const ast = parser(`<div><p>Vue</p><p>Template</p></div>`);
 console.log('ast is', ast);
+
+transform(ast);
+dump(ast);
