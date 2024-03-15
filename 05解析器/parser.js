@@ -58,7 +58,15 @@ function parserChildren(content, ancestors) {
 }
 
 function isEnds(content, ancestors) {
+  // 消耗完状态机停止
+  if (!content.source) return true;
 
+  for (let i = ancestors.length - 1; i >= 0; i--) {
+    // 只要碰到闭合标签,停止状态机
+    if (content.source.startWith(`</${ancestors[i].tag}>`)) {
+      return true;
+    }
+  }
 }
 
 // 解析文本
